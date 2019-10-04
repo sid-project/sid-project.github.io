@@ -1,0 +1,879 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Storage Instantiation Daemon</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Storage Instantiation Daemon  documentation" href="index.html"/>
+        <link rel="next" title="Prerequisities" href="prerequisities.html"/>
+        <link rel="prev" title="Community" href="community.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background-color: #343131">
+          
+
+          <a href="https://sid-project.github.io">
+            <img src="_static/sid.png" class="logo" />
+
+            <span class="project-title">Storage Instantiation Daemon</span>
+          </a>
+
+          <ul class="edition-switcher">
+            <li>Edition: </li>
+            <li><a href="../v">Switch editions</a></li>
+            
+          </ul>
+
+          
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="community.html">Community</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Context</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prerequisities.html">Prerequisities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="daemon.html">Storage Instantiation Daemon</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module API</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Storage Instantiation Daemon</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="dd-masthead">
+  <h1 class="dd-title">Storage Instantiation Daemon</h1>
+  <ul class="dd-authors">
+    
+  </ul>
+  <p>Latest Revision: <a href="#change-record"></a></p>
+</div>
+           <div itemprop="articleBody">
+            
+  <div class="section" id="context">
+<h1>Context<a class="headerlink" href="#context" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="uevents-and-udev">
+<h2>Uevents and udev<a class="headerlink" href="#uevents-and-udev" title="Permalink to this headline">¶</a></h2>
+<p>Linux kernel provides a way to send simple notification messages to
+userspace related to changes of device’s state and we call these <em>udev
+events</em> or <em>uevents</em> for short.</p>
+<p>The uevents are sent from kernel to userspace using <em>netlink</em> interface
+(<em>man 7 netlink</em>). The exact netlink type reserved for this purpose is
+<code class="docutils literal notranslate"><span class="pre">NETLINK_KOBJECT_UEVENT</span></code>. One or more userspace listeners can register
+to receive the events and if there is more than one listener, these events
+are sent in multicast manner.</p>
+<p>Currently supported set of <em>action names</em> used for uevents are:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">add</span></code></div>
+<div class="line">device added,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">change</span></code></div>
+<div class="line">device changed,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">remove</span></code></div>
+<div class="line">device removed,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">move</span></code></div>
+<div class="line">device moved to a new parent or device renamed,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">offline</span></code></div>
+<div class="line">device is put offline,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">online</span></code></div>
+<div class="line">device is put back online after being offline,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">bind</span></code></div>
+<div class="line">driver is bound to a device (since kernel version 4.14),</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">unbind</span></code></div>
+<div class="line">driver is unbound from a device (since kernel version 4.14).</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>The most frequently used ones are <code class="docutils literal notranslate"><span class="pre">add</span></code>, <code class="docutils literal notranslate"><span class="pre">change</span></code> and <code class="docutils literal notranslate"><span class="pre">remove</span></code>.
+Each kernel uevent contains a set of environment variables in <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code>
+format. The minimal and basic set of keys we can find in&nbsp;the kernel uevent,
+which is added by kernel’s common uevent code, contains at least:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">ACTION</span></code></div>
+<div class="line">device’s action name,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DEVPATH</span></code></div>
+<div class="line">device’s canonical path in <em>sysfs</em> (see also <em>man 5 sysfs</em>),</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">SUBSYSTEM</span></code></div>
+<div class="line">subsystem the device belongs to,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">SEQNUM</span></code></div>
+<div class="line">this uevent’s sequence number.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>The Linux kernel’s driver core then adds further keys to extend the basic
+set, if values for these keys are available:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">MAJOR</span></code></div>
+<div class="line">device’s major number,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">MINOR</span></code></div>
+<div class="line">device’s minor number,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DEVNAME</span></code></div>
+<div class="line">device’s canonical kernel name,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DEVMODE</span></code></div>
+<div class="line">device’s permissions mode,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DEVUID</span></code></div>
+<div class="line">device’s user ID (if not global root UID),</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DEVGID</span></code></div>
+<div class="line">device’s group ID (if not global root GID),</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DEVTYPE</span></code></div>
+<div class="line">device’s type name,</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">DRIVER</span></code></div>
+<div class="line">device’s driver name.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>Various device subsystems and device drivers in kernel can add even more
+additional <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs. However, the overall size of the uevent is
+limited: maximum number of <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs is 32 (<code class="docutils literal notranslate"><span class="pre">UEVENT_NUM_ENVP</span></code>
+constant as found in kernel source code) and the overall size limit for the
+whole uevent sent from kernel is 2048 bytes (<code class="docutils literal notranslate"><span class="pre">UEVENT_BUFFER_SIZE</span></code>
+constant as found in kernel source code).</p>
+<p>For the purpose of this text, we will call the uevents which are sent from
+kernel the <strong>genuine kernel uevents</strong> (or <em>kernel uevents</em> shortly).</p>
+<p>In general, each uevent for a block device has: <code class="docutils literal notranslate"><span class="pre">ACTION</span></code>, <code class="docutils literal notranslate"><span class="pre">DEVPATH</span></code>,
+<code class="docutils literal notranslate"><span class="pre">SUBSYSTEM</span></code>, <code class="docutils literal notranslate"><span class="pre">SEQNUM</span></code>, <code class="docutils literal notranslate"><span class="pre">MAJOR</span></code>, <code class="docutils literal notranslate"><span class="pre">MINOR</span></code>, <code class="docutils literal notranslate"><span class="pre">DEVNAME</span></code> and <code class="docutils literal notranslate"><span class="pre">DEVTYPE</span></code>
+keys set in its uevent environment.</p>
+<p>Besides genuine kernel uevents generated based on execution within kernel
+and its drivers, there are also <strong>synthetic kernel uevents</strong> (or <em>synthetic
+uevents</em> shortly). Even though these uevents are generated in kernel, they
+are provoked directly in userspace by writing the uevent action name to
+<code class="docutils literal notranslate"><span class="pre">/sys/…/uevent</span></code> file. Such uevents look exactly like <em>genuine kernel
+uevents</em>, the only difference is that they do not contain any additional
+keys in their environment that drivers may add, only the basic key set.
+Such uevents are usually used to trigger device state reevaluation back in
+userspace once the synthetic uevent is received in userspace.</p>
+<p>It is also possible to send uevents directly from userspace back to
+userspace, hence providing a way to send messages between two or more
+userspace processes. We call these <strong>udev uevents</strong>.</p>
+<p>General term that encompasses all the uevents and the logic of dynamic
+device management based on these uevents in userspace is <strong>udev</strong>.
+On userspace side, the important component is the <em>udev daemon</em>.</p>
+</div>
+<div class="section" id="udev-daemon">
+<h2>Udev daemon<a class="headerlink" href="#udev-daemon" title="Permalink to this headline">¶</a></h2>
+<p>One of userspace uevent listeners has a primary role and this is the
+<strong>udev daemon</strong>, or shortly <strong>udevd</strong>, which is a part of <a class="reference external" href="https://www.freedesktop.org/wiki/Software/systemd/">systemd</a>
+project.</p>
+<p>The way udevd processes uevents in userspace is driven by <strong>udev rules</strong>
+which are usually placed in <code class="docutils literal notranslate"><span class="pre">/lib/udev/rules.d</span></code> and <code class="docutils literal notranslate"><span class="pre">/etc/udev/rules.d</span></code>
+directory. There is a common set of rules provided directly by upstream
+udevd, other rules are installed by foreign tools and system components.</p>
+<p>Whenever there is a new kernel uevent (genuine or synthetic one) coming
+from the kernel and when received by udevd, the udevd creates a new process
+(also called <em>udevd worker</em>) to handle the event or reuses existing one if
+it is available. The udevd keeps worker processes if previous event has
+just been processed and the queue is not empty yet so it reuses the worker
+immediately to execute the rules for next uevent, hence optimizing and
+saving machine time and resources.</p>
+<p>Only one event can be handled at a time for a single device. That means all
+processing of uevents that are issued for a single device is serialized,
+queued and processed one by one while uevents for different devices can
+still be processed in parallel. Devices are distinguished based on their
+canonical device path in sysfs.</p>
+<p>There is a limit to the number of worker processes that are created to
+handle the uevents in parallel and this is controlled by udevd’s
+<code class="docutils literal notranslate"><span class="pre">--children-max</span></code> command line option or provided on kernel command
+line as <code class="docutils literal notranslate"><span class="pre">udev.children_max</span></code> argument. This way, it is possible to control
+the degree of parallelism the udevd uses. With current implementation,
+the default value for this option is computed using a simple formula that
+is based on number of CPU cores available:</p>
+<p>Udevd’s primary role is to collect any additional information that is
+needed to create various symlinks under /dev directory and to set
+permissions driven by instructions written in udev rules. Udevd has
+no control over device node names (with the exception of network
+devices). With devtmpfs filesystem in use, the device nodes are created
+directly by kernel and udevd only adjusts their permissions. Udev rules
+can also access information present in sysfs for the device that is being
+processed. To collect any other information, udev rules need to instruct
+udevd to execute external commands or to gather this information in a
+special way. This is accomplished by executing one of these rules:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">IMPORT</span></code></div>
+<div class="line">Executes a command that exports the information in <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code>
+pairs that is then imported into udev context which further udev
+rules can access; the actual call is made right at the time when the
+rule is hit.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">RUN</span></code></div>
+<div class="line">Adds a command to the list of commands to be executed after all the
+rules are processed – so delaying the execution up to the end of udev
+rule processing.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">PROGRAM</span></code></div>
+<div class="line">Executes a command where the string output from the last executed
+command can be matched with accompanying <code class="docutils literal notranslate"><span class="pre">RESULT</span></code> rule.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>The <code class="docutils literal notranslate"><span class="pre">IMPORT</span></code> and <code class="docutils literal notranslate"><span class="pre">RUN</span></code> rule can either execute external command or
+it can execute udevd’s own <em>builtin command</em> by specifying
+<code class="docutils literal notranslate"><span class="pre">IMPORT{builtin}</span></code> or <code class="docutils literal notranslate"><span class="pre">RUN{builtin}</span></code>. The builtin commands have
+advantage over external commands in fact that they do not require a new
+process to get created (forked) and these commands are initialized as
+soon as udevd is started. However, builtin commands need to be integrated
+directly into udevd’s code base - they are not designed as external modules
+loaded on udevd startup.</p>
+<p>Udevd poses a restriction on time to execute all the udev rules for
+particular uevent. Currently, the default value is 180 seconds. It is
+possible to override the default value by specifying udevd’s
+<code class="docutils literal notranslate"><span class="pre">event-timeout</span></code> option or by specifying the timeout value on kernel
+command line with <code class="docutils literal notranslate"><span class="pre">udev.event-timeout</span></code> argument. The timer starts
+counting as soon as the worker process is forked or reused and it is
+stopped when main udevd process receives a message from worker processes
+that it has finished the processing. Simplified list of steps taken to
+execute udev worker on incoming kernel uevent is following:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li>kernel uevent is received by main udevd process</li>
+<li>udevd create or reuses udevd worker process to handle the uevent</li>
+<li>udevd starts timer for the udevd worker</li>
+<li>udevd worker executes and applies udev rules</li>
+<li>udevd worker updates <em>udev database</em></li>
+<li>udevd worker executes run queue
+(all the calls as instructed by <code class="docutils literal notranslate"><span class="pre">RUN</span></code> rule)</li>
+<li>udevd worker sends udev uevent</li>
+<li>udevd worker sends&nbsp; <em>worker finished</em> message to main udevd process</li>
+<li>udevd receives the <em>worker finished</em> message from worker</li>
+<li>udevd stops timer for the udevd worker</li>
+</ol>
+</div></blockquote>
+<p>The udev uevent, in contrast to kernel uevent, is the uevent sent by udevd
+directly to all its listeners after all the rules have been processed and
+hence such uevent contains all the environment variables in <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code>
+format that have been added by execution and application of the udev rules.
+The udev uevent is sent by udevd using the same netlink interface as udevd
+used to receive the kernel uevent, the netlink interface makes this
+possible. Usually, udev uevent as well as kernel uevent listeners subscribe
+for these uevents using <a class="reference external" href="https://www.freedesktop.org/software/systemd/man/libudev.html">libudev</a> library (<em>man 3 libudev</em>) which wraps up
+these uevents in a structure for easier manipulation and for further
+processing using various libudev functions and also it abstracts out the
+actual netlink usage for the library user.</p>
+<p>The udev database is a simple filesystem-based database (usually stored
+in <code class="docutils literal notranslate"><span class="pre">/run/udev</span></code> directory). It contains current environment for each
+device – the <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs and other information used and recorded
+by udevd: list of symlinks, symlink priority, tags and monitoring of
+device content changes requested by <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code> udev rule.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code> udev rule is internally implemented using
+<code class="docutils literal notranslate"><span class="pre">inotify</span></code> monitoring mechanism (<em>man 7 inotify</em>). Whenever a monitored
+device is closed after being open for writing before, udev daemon
+receives the inotify event. Then, udev daemon generates synthetic uevent
+for the device based on the inotify event. The <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code>
+udev rule is usually used when we expect that a write operation to
+the device can change its content in a way that this also changes the
+way udev rules are evaluated and that in turn can change the udev
+database content.</p>
+</div>
+</div>
+<div class="section" id="block-device-uevent-processing">
+<h2>Block device uevent processing<a class="headerlink" href="#block-device-uevent-processing" title="Permalink to this headline">¶</a></h2>
+<p>Block device uevent processing is driven by udev rules provided by both
+upstream udev itself as well as block device subsystems.</p>
+<div class="section" id="rules-provided-by-udev-itself">
+<h3>Rules provided by udev itself<a class="headerlink" href="#rules-provided-by-udev-itself" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">60-block.rules</span></code></div>
+<div class="line">Eenables media presence polling, forwards scsi events to
+corresponding block device and sets <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code> for
+selected block devices.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">60-persistent-storage.rules</span></code></div>
+<div class="line">Imports parent information from udev database for partitions, calls
+<code class="docutils literal notranslate"><span class="pre">ata-id</span></code>, <code class="docutils literal notranslate"><span class="pre">scsi_id</span></code>, <code class="docutils literal notranslate"><span class="pre">usb_id</span></code>, <code class="docutils literal notranslate"><span class="pre">path_id</span></code>, <code class="docutils literal notranslate"><span class="pre">blkid</span></code>, sets
+device symlinks.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">60-persistent-storage-tape.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">blkid</span></code>, sets device symlinks.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">60-cdrom_id.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">cdrom_id</span></code>, sets device symlinks.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">64-btrfs.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">btrfs_ready</span></code> builtin command, marks device as not ready if
+needed and sets <code class="docutils literal notranslate"><span class="pre">SYSTEMD_READY</span></code> variable appropriately.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">99-systemd.rules</span></code></div>
+<div class="line">Sets <code class="docutils literal notranslate"><span class="pre">SYSTEMD_READY</span></code> variable based on various other variables
+and/or <code class="docutils literal notranslate"><span class="pre">sysfs</span></code> content. It also includes handling of loop devices.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="rules-provided-by-device-mapper-dm-subsystem">
+<h3>Rules provided by device-mapper (DM) subsystem<a class="headerlink" href="#rules-provided-by-device-mapper-dm-subsystem" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">10-dm.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">dmsetup</span> <span class="pre">udevflags</span></code> to decode flags out of <code class="docutils literal notranslate"><span class="pre">DM_COOKIE</span></code>
+variable, calls <code class="docutils literal notranslate"><span class="pre">dmsetup</span> <span class="pre">info</span></code> if needed, sets device symlinks,
+imports variables from previous udev database state if needed.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">13-dm-disk.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">blkid</span></code>, sets device symlinks.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">95-dm-notify.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">dmsetup</span> <span class="pre">udevcomplete</span></code> to notify waiting process about udev
+rule processing completion.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<div class="section" id="rules-provided-by-dm-lvm-subsystem">
+<h4>Rules provided by DM-LVM subsystem<a class="headerlink" href="#rules-provided-by-dm-lvm-subsystem" title="Permalink to this headline">¶</a></h4>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">11-dm-lvm.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">dmsetup</span> <span class="pre">splitname</span></code> to split DM name into VG/LV/layer parts,
+imports variables from previous udev state if needed, sets device
+symlinks.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">12-dm-lvm-permissions.rules</span></code></div>
+<div class="line">This is a template to add rules to set device permissions.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">69-dm-lvm-metad.rules</span></code></div>
+<div class="line">Detects when the device is ready for use and schedules
+<code class="docutils literal notranslate"><span class="pre">lvm2-pvscan&#64;&lt;major&gt;:&lt;minor&gt;.service</span></code> systemd unit containing
+<code class="docutils literal notranslate"><span class="pre">pvscan</span> <span class="pre">--cache</span> <span class="pre">-a</span> <span class="pre">ay</span> <span class="pre">call</span></code> to update <code class="docutils literal notranslate"><span class="pre">lvmetad</span></code> and to activate
+a VG once it is complete.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="rules-provided-by-dm-multipath-subsystem">
+<h4>Rules provided by DM-multipath subsystem<a class="headerlink" href="#rules-provided-by-dm-multipath-subsystem" title="Permalink to this headline">¶</a></h4>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">11-dm-mpath.rules</span></code></div>
+<div class="line">Imports variables from previous udev database state if needed, marks
+multipath device either as ready or not or whether scanning can be
+done on this device.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">62-multipath.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">multipath</span> <span class="pre">-c</span></code> and <code class="docutils literal notranslate"><span class="pre">multipath</span> <span class="pre">-T</span></code> to check for multipath
+components, imports variables from previous udev database state if
+needed, calls <code class="docutils literal notranslate"><span class="pre">partx</span></code> to remove partitions on multipath components
+and it calls <code class="docutils literal notranslate"><span class="pre">kpartx</span></code> to create partition mappings on top of a
+multipath device.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="rules-provided-by-multiple-device-md-subsystem">
+<h3>Rules provided by multiple device (MD) subsystem<a class="headerlink" href="#rules-provided-by-multiple-device-md-subsystem" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">63-md-raid-arrays.rules</span></code></div>
+<div class="line">Handles arrays with external metadata: DDF and Intel Matrix RAID,
+calls <code class="docutils literal notranslate"><span class="pre">mdadm</span> <span class="pre">–-detail</span></code>, calls <code class="docutils literal notranslate"><span class="pre">blkid</span></code>, creates device symlinks,
+schedules MD array monitoring.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">65-md-incremental.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">mdadm</span> <span class="pre">-I</span></code> for incremental addition or removal of a device
+to/from an MD array if the device is ready/removed, requests
+<code class="docutils literal notranslate"><span class="pre">mdadm-last-resort&#64;&lt;md_device&gt;.timer</span></code> systemd unit to get started
+to implement a timeout on MD devicefor it to be started in degraded
+mode.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="rules-provided-by-ceph-subsystem">
+<h3>Rules provided by Ceph subsystem<a class="headerlink" href="#rules-provided-by-ceph-subsystem" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">50-rbd.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">ceph-rbdnamer</span></code> and creates device symlinks based on results.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">60-ceph-by-parttypeuuid.rules</span></code></div>
+<div class="line">Forwards SCSI events to corresponding block device, imports parent
+information from udev database for partitions, calls <code class="docutils literal notranslate"><span class="pre">blkid</span></code>,
+creates device symlinks for partitions.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">95-ceph-osd.rules</span></code></div>
+<div class="line">Sets permissions, calls <code class="docutils literal notranslate"><span class="pre">ceph-disk</span></code>)</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="rules-provided-by-btrfs-subsystem">
+<h3>Rules provided by btrfs subsystem<a class="headerlink" href="#rules-provided-by-btrfs-subsystem" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">64-btrfs-dm.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">btrfs</span> <span class="pre">ready</span></code> to let btrfs subsystem know underlying DM
+device is ready.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">64-btrfs.rules</span></code></div>
+<div class="line">Calls <code class="docutils literal notranslate"><span class="pre">btrfs</span> <span class="pre">ready</span></code> to let btrfs subsystem know the underlying
+device is ready.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="problematic-areas">
+<h2>Problematic areas<a class="headerlink" href="#problematic-areas" title="Permalink to this headline">¶</a></h2>
+<p>The udevd was primarily designed to collect additional information that is
+needed for a specific device and then let udevd create additional symlinks
+in <code class="docutils literal notranslate"><span class="pre">/dev</span></code> and set proper permissions for the device node based on rules.</p>
+<p>Although the majority of the rules to handle block devices do contain rules
+that set device node symlinks, the fact is that over the years the number
+of various other calls within these rules has risen too. Currently, it is
+not only that additional information collection that the rules do, but it
+is also other functionality, like further activation and various helper
+calls to support various specific aspects of block device subsystems. As a
+consequence, there are various problems and shortcomings related with this
+approach which became significant.</p>
+<p>This section lists and briefly describes various problems and shortcomings
+in general which we have identified while trying to deploy storage-related
+solutions over time and then trying to integrate them with udev.</p>
+<p>These problems are not completely discrete. Instead, they are very closely
+related to each other and a solution to one of these problems usually
+reduces degree of impact of other problematic parts.</p>
+<div class="section" id="multistep-activation">
+<h3>Multistep activation<a class="headerlink" href="#multistep-activation" title="Permalink to this headline">¶</a></h3>
+<p>Some block devices have more complex nature when it comes to activation and
+detecting current device state.</p>
+<p>This is mainly the case for subsystems like DM (including device-mapper
+multipath and LVM subsystem) and MD devices where they are are created
+first (that generates <code class="docutils literal notranslate"><span class="pre">add</span></code> uevent), but the device may not be usable
+right away. Usually, there is another step or more to make these devices
+ready for use (that generates further <code class="docutils literal notranslate"><span class="pre">change</span></code> uevents).</p>
+</div>
+<div class="section" id="notion-of-device-groups-and-stack-awareness">
+<h3>Notion of device groups and stack awareness<a class="headerlink" href="#notion-of-device-groups-and-stack-awareness" title="Permalink to this headline">¶</a></h3>
+<p>One of the most important features we also need to take into account is the
+fact that some block devices can be stacked on top of each other and they
+can form an abstraction over a set of devices which logically groups them
+together.</p>
+<p>Udev has no direct notion of grouping or stack awareness within the device
+groups.</p>
+</div>
+<div class="section" id="intermediate-steps-during-device-management">
+<h3>Intermediate steps during device management<a class="headerlink" href="#intermediate-steps-during-device-management" title="Permalink to this headline">¶</a></h3>
+<p>Some subsystems also support conversions from one type to another which may
+require several deactivation and activation steps and transforming the
+device with intermediate steps in between.</p>
+<p>Unless we mark the intermediate states with additional <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs
+within the uevents the kernel driver generates or unless we use an external
+information or tool to decide on what the current state is, we cannot make
+a difference within udev rules and we act as if this was usual device
+activation or deactivation or a generic change. The usual set of rules are
+executed even though the commands executed within those rules may interfere
+with the process of device transformation or conversion.</p>
+<p>Also, such processing may not be efficient if the result is outdated right
+in the next step that follows and we are only interested in the overall
+result when the device is fully set up again and ready for use.</p>
+</div>
+<div class="section" id="recognizing-uevents-device-s-state-and-overloaded-uevents">
+<h3>Recognizing uevents, device’s state and overloaded uevents<a class="headerlink" href="#recognizing-uevents-device-s-state-and-overloaded-uevents" title="Permalink to this headline">¶</a></h3>
+<p>All block device subsystems use udevd to drive userspace actions based on
+uevents coming from kernel - either originating in the kernel driver itself
+or synthesized in userspace by writing the <code class="docutils literal notranslate"><span class="pre">/sys/…/uevent</span></code> file.
+Inherently, some of the special uevents that these block subsystems would
+need to have processed are mapped onto a single <code class="docutils literal notranslate"><span class="pre">change</span></code> uevent instead
+of distinct uevents directly describing the nature of the event.</p>
+<p>This fact makes&nbsp; the udev rules complex because they need to deal with
+these device state transitions and they need to recognize uevents properly
+to know what the transition is exactly, possibly comparing udev’s
+environment (the <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs) with previous environment stored in
+udev database.</p>
+<p>Udevd was not designed for this task. Even though there are rules to import
+previous udev database values (the <code class="docutils literal notranslate"><span class="pre">IMPORT{db}</span></code> udev rule), we cannot do
+direct comparisons of previous and current values for certain keys which
+are in udev’s environment in an efficient way. We can only do simple string
+matching so only rules in the form of
+<code class="docutils literal notranslate"><span class="pre">ENV{KEY}==&quot;direct_string_to_match&quot;</span></code> are possible, but not
+<code class="docutils literal notranslate"><span class="pre">ENV{KEY1}==ENV{KEY2}</span></code>. Also, udevd does not support number comparisons
+directly within udev rules, because the only operator supported is a match
+against an explicit string value.</p>
+</div>
+<div class="section" id="udev-rule-language-and-related-restrictions">
+<h3>Udev rule language and related restrictions<a class="headerlink" href="#udev-rule-language-and-related-restrictions" title="Permalink to this headline">¶</a></h3>
+<p>It is up to the driver or udev rules to properly recognize current state.
+The kernel driver can add a set of various additional <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs
+that it passes with the kernel uevent it generates. Alternatively, if we
+try to handle this in udev rules directly, we need to get previous udev
+database state, do comparisons of the states and/or call an external tool
+to evaluate the environment and return the results back to udev context
+to evaluate the rules further.</p>
+<p>Considering the fact that the language used to articulate udev rules is
+very simple and restricted, we may end up with complex rules even for
+relatively simple device state detection or detection of device state
+advancement within a state machine we need to track, including the burden
+of calling an external tool to make further decisions.</p>
+<p>This makes it hard to implement state machines within udev rules to track
+devices properly.</p>
+</div>
+<div class="section" id="debugging-and-logging">
+<h3>Debugging and logging<a class="headerlink" href="#debugging-and-logging" title="Permalink to this headline">¶</a></h3>
+<p>As the rules get more and more complex, whenever a problem appears, it is
+complicated to perform effective debugging - udevd does not report current
+environment it is working with nor does it have support for adding
+additional logging hooks into the rules directly. With this, it is hard to
+track what the actual path was taken when the udev rules were processed
+and what the actual states were.</p>
+<p>This status quo is also a consequence of the fact that some device
+subsystems try to implement more complex logic with the udev rules tha
+what they were originally designed for.</p>
+</div>
+<div class="section" id="marking-devices-as-ready">
+<h3>Marking devices as ready<a class="headerlink" href="#marking-devices-as-ready" title="Permalink to this headline">¶</a></h3>
+<p>The udev rules are responsible for triggering device activation based on
+current state at proper time. This becomes even more prominent if we are
+considering device stacks where one block device subsystem is layered on
+top of another one and so on.</p>
+<p>We need to have a proper and standard way of marking devices in the layer
+below as ready for any layer above. This standard is currently missing.
+Each subsystem has its own way of marking the device as ready – there are
+various <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs to check in udev’s environment (e.g.
+<code class="docutils literal notranslate"><span class="pre">DM_ACTIVATION</span></code>, <code class="docutils literal notranslate"><span class="pre">MD_STARTED</span></code>, <code class="docutils literal notranslate"><span class="pre">SYSTEMD_READY</span></code>, …).</p>
+<p>The same problem arises when considering event subscribers using udev
+monitoring which have no standardized way to know whether a device is ready
+for use or not.</p>
+</div>
+<div class="section" id="amount-of-work-in-udevd-context">
+<h3>Amount of work in udevd context<a class="headerlink" href="#amount-of-work-in-udevd-context" title="Permalink to this headline">¶</a></h3>
+<p>Another problem that arises is related with the amount of work that needs
+to be done to process the uevent while processing udev rules.</p>
+<p>As per udevd design, this extra work and processing needs to be minimized
+as much as possible and it should be restricted to acquiring the
+information that is needed to have all the needed symlinks in <code class="docutils literal notranslate"><span class="pre">/dev</span></code>
+created. That means, all the rules and processing that is not related to
+collecting basic device identification and information collection should be
+moved out of udevd context and executed later or, if possible, in parallel
+to udevd.</p>
+</div>
+<div class="section" id="timeouts">
+<h3>Timeouts<a class="headerlink" href="#timeouts" title="Permalink to this headline">¶</a></h3>
+<p>Udevd sets up timeout for each uevent’s processing. On heavy-loaded system,
+this can pose a problem as default timeout may not be enough. The timeouts
+cannot be set in runtime - support for <code class="docutils literal notranslate"><span class="pre">OPTIONS=&quot;event_timeout&quot;</span></code> rule
+has been removed from udevd.</p>
+<p>If the timeout occurs, the udevd worker with any of its children processes
+is killed by udevd using <code class="docutils literal notranslate"><span class="pre">SIGTERM</span></code> signal. For this reason, commands
+which may take longer to execute must be executed in background. On systems
+with systemd, the command needs to be instantiated as a service even,
+completely out of udevd’s context and its control group. There is no
+special handling for these timeouts – if a timeout occurs and the udevd
+worker is killed, any udev uevent listener will receive the uevent without
+any additional variables set – udevd just relays the kernel uevent it
+receives as udev uevent to all its listeners.</p>
+<p>If the timeout happens, we would need to let the listeners know or provide
+a possibility to define fallback actions to keep the system running and
+letting the user fix the configuration or increase timeouts if needed.</p>
+</div>
+<div class="section" id="synthetic-uevents">
+<h3>Synthetic uevents<a class="headerlink" href="#synthetic-uevents" title="Permalink to this headline">¶</a></h3>
+<p>Another problematic area is with the source of uevents. Besides genuine
+udev events coming from kernel directly, there are also synthetic events,
+as we already mentioned before. There are three usual ways how the
+synthetic uevent is triggered from user’s perspective:</p>
+<blockquote>
+<div><ul class="simple">
+<li>by directly writing the event name to <code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file,</li>
+<li>by calling udevadm trigger command (which in turn writes to the
+<code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file),</li>
+<li>by using <code class="docutils literal notranslate"><span class="pre">OPTIONS=&quot;watch&quot;</span></code> udev rule for a device (and then
+whenever the device is opened for writing and then closed,
+the inotify watch triggers that udevd receives that in turn writes
+to the <code class="docutils literal notranslate"><span class="pre">/sys/../uevent</span></code> file).</li>
+</ul>
+</div></blockquote>
+<p>If kernel driver does not provide any additional variables for the uevent
+it generates, the genuine uevent is indistinguishable from the synthetic
+one – this may make it harder to recognize which event is the one that
+makes the device ready for use. For a long time, udev’s position was that
+these two uevents should remain indistinguishable and uevent listeners
+and authors of udev rules should account for this fact.</p>
+<p>However, our argument is that there is indeed a difference in these two
+types of uevents. The genuine kernel uevents notify userspace about a state
+change of the device itself (e.g. device addition or change in device’s
+configuration that the kernel itself is aware of, device’s removal).
+The synthetic uevents, which originate in userspace actions, are either
+used to refresh udev’s state in userspace (e.g. to repopulate udev database
+if it was cleared before or started afresh or to notify any uevent
+subscribers to simply reread information based on the uevent if it is
+needed).</p>
+<p>Alternatively, synthetic uevents may be used to notify about changes in
+device’s content in general – the device’s content is something that is
+usually not tracked by kernel device drivers (e.g. subsystem or filesystem
+signatures are added to device or they are cleared).</p>
+<p>At the moment, the two types of uevents are considered equal. This is a
+source of confusion when handling the uevents and it may also cause useless
+resource consumption due to excessive processing. Trying to solve this
+issue, at least partially, within udev context, requires writing even more
+complex udev rules to try to make a difference between these two uevent
+types.</p>
+<p>Also, the synthetic event is completely asynchronous and we cannot
+synchronize with that at all at the moment. This creates considerable
+burden for any tools trying to access the device exclusively or even
+remove the device because synthetic uevents can happen in parallel.</p>
+</div>
+<div class="section" id="marking-devices-as-private-or-public">
+<h3>Marking devices as private or public<a class="headerlink" href="#marking-devices-as-private-or-public" title="Permalink to this headline">¶</a></h3>
+<p>Another problematic area is within identification of devices which are
+private for the subsystem. Such devices only act as building blocks to
+create a higher level device that is supposed to be the one used.</p>
+<p>Also, we may need to initialize the device first before marking it as
+ready for use. For example, we need to erase any old signatures which may
+be left on the device from previous use. Again, there is no standard
+defined on how such devices are marked (e.g. DM devices use flags in
+<code class="docutils literal notranslate"><span class="pre">DM_COOKIE</span></code> uevent variable to handle this while MD uses a temporary file
+<code class="docutils literal notranslate"><span class="pre">/run/mdadm/creating-&lt;md_device_name&gt;</span></code> in filesystem to mark device as
+not fully initialized yet).</p>
+</div>
+<div class="section" id="device-initialization">
+<h3>Device initialization<a class="headerlink" href="#device-initialization" title="Permalink to this headline">¶</a></h3>
+<p>We should be able to activate a device in private mode first (without doing
+scans), providing time for usersapce tools to do any initialization steps
+and cleaning that is necessary to properly make the device ready for use.</p>
+<p>After these initialization steps, userspace tool should be able to switch
+the device into ready state by issuing synthetic uevent that is properly
+recognized for this type of switch from private to public mode.</p>
+<p>Eventually, the solution for this initialization and wiping part during
+device activation may be centralized and handled by a single external
+entity without a need for each subsystem to provide its own code to
+implement this. Such solution would be preferred, but it requires the
+central entity to have enough knowledge so that the initialization and
+wiping operation is safe to do at a specific time. The external entity
+needs to recognize this initialization state properly and that is already
+the problem we have identified before – with current scheme, we are not
+completely sure about states.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="prerequisities.html" class="btn btn-neutral float-right" title="Prerequisities" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="community.html" class="btn btn-neutral" title="Community" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Peter Rajnoha.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+   <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
