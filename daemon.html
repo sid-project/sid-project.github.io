@@ -1,0 +1,583 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Storage Instantiation Daemon</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Storage Instantiation Daemon  documentation" href="index.html"/>
+        <link rel="next" title="Module API" href="api.html"/>
+        <link rel="prev" title="Prerequisities" href="prerequisities.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background-color: #343131">
+          
+
+          <a href="https://sid-project.github.io">
+            <img src="_static/sid.png" class="logo" />
+
+            <span class="project-title">Storage Instantiation Daemon</span>
+          </a>
+
+          <ul class="edition-switcher">
+            <li>Edition: </li>
+            <li><a href="../v">Switch editions</a></li>
+            
+          </ul>
+
+          
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="community.html">Community</a></li>
+<li class="toctree-l1"><a class="reference internal" href="context.html">Context</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prerequisities.html">Prerequisities</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Storage Instantiation Daemon</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module API</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Storage Instantiation Daemon</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="dd-masthead">
+  <h1 class="dd-title">Storage Instantiation Daemon</h1>
+  <ul class="dd-authors">
+    
+  </ul>
+  <p>Latest Revision: <a href="#change-record"></a></p>
+</div>
+           <div itemprop="articleBody">
+            
+  <div class="section" id="storage-instantiation-daemon">
+<h1>Storage Instantiation Daemon<a class="headerlink" href="#storage-instantiation-daemon" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="stages-and-phases">
+<h2>Stages and phases<a class="headerlink" href="#stages-and-phases" title="Permalink to this headline">¶</a></h2>
+<p>Storage Instantiation Daemon (SID) is layered on top of udev. Its
+functionality is driven by interception of two kinds of events based on
+which execution of a SID stage is initiated:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><strong>Stage A</strong></div>
+<div class="line">Also called <em>udev stage</em>. It is started by reception of
+<code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">scan</span></code> request out of a udev rule while processing device’s
+uevent within udevd. The stage completes by reception of
+<code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">checkpoint</span> <span class="pre">complete</span></code> call out of another udev rule which is
+positioned within udev rules so that it is executed as the last one
+for current device. Therefore, we are making use of
+<code class="docutils literal notranslate"><span class="pre">RUN+=&quot;sid</span> <span class="pre">checkpoint</span> <span class="pre">complete&quot;</span></code> rule to queue the call up until
+the point when all the other udev rules are processed, but before the
+udev uevent is triggered. At this stage, processing any subsequent
+uevents for this device is still blocked by udevd.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Stage B</strong></div>
+<div class="line">Also called <em>trigger-action stage</em>. It is started by reception of
+udev uevent for the device, that is, after all udev rule processing
+for the uevent is completely finished, including any <code class="docutils literal notranslate"><span class="pre">RUN</span></code> rules.
+At this stage, processing any subsequent uevents for this device is
+no longer blocked by udevd, that means, while we are processing stage
+B in SID, udevd can already be processing another uevent for this
+device.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>Besides SID <strong>core</strong> that handles both stage A and B, SID provides a way
+to load <strong>modules</strong> to extend the stage A and stage B processing. Each
+stage is divided further into discrete <strong>phases</strong> where each module can
+register callback functions to handle specific processing.</p>
+<p><strong>Stage A</strong> consists of these consecutive top-level phases (SID components
+which handle each phase are given in square brackets):</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">IDLE</span></code> [core]</div>
+<div class="line">Awaiting request from a udev rule running <code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">scan</span></code> command.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">INIT</span></code> [core]</div>
+<div class="line">The <code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">scan</span></code> request received. Initializing processing sequence.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">IDENT</span></code> [core, module]</div>
+<div class="line">Executing basic device type identification and decision-making
+routines. The core looks up device type name in <code class="docutils literal notranslate"><span class="pre">/proc/devices</span></code>
+based on its major number. The device type name is then used to
+determine a module to load (if not already loaded) for further
+processing and subsequent phases.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">SCAN</span></code> [core, module]</div>
+<div class="line">This is the main phase executing device scanning, decision-making
+routines and storing collected information. At this phase, we are
+able to schedule possible actions to execute during stage B
+processing.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">WAIT</span></code> [core]</div>
+<div class="line">Awaiting a confirmation from a udev rule running <code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">checkpoint</span>
+<span class="pre">complete</span></code> command.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>There is one specialized error handling phase:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">ERROR</span></code> [core, module]</div>
+<div class="line">Handling a failure hit in any of previous phases.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p><strong>Stage B</strong> is responsible for executing actions and it consists of one
+phase:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">TRIGGER-ACTION</span></code> [core, module]</div>
+<div class="line">Checking trigger conditions and executing associated actions.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<div class="section" id="phase-modules">
+<h3>Phase modules<a class="headerlink" href="#phase-modules" title="Permalink to this headline">¶</a></h3>
+<p>The modules can handle <code class="docutils literal notranslate"><span class="pre">IDENT</span></code>, <code class="docutils literal notranslate"><span class="pre">SCAN</span></code> and <code class="docutils literal notranslate"><span class="pre">ERROR</span></code> phase - we call
+these <em>phase modules</em>. SID differentiates between two types of phase
+modules:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><strong>generic phase module</strong></div>
+<div class="line">This is a module that is always executed for a phase by SID,
+irrespective of  what the detected device type within <code class="docutils literal notranslate"><span class="pre">IDENT</span></code> and
+<code class="docutils literal notranslate"><span class="pre">SCAN</span></code> phase is.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>dedicated phase module</strong></div>
+<div class="line">This is a module that is executed only if it matches detected device
+type within <code class="docutils literal notranslate"><span class="pre">IDENT</span></code> and <code class="docutils literal notranslate"><span class="pre">SCAN</span></code> phase.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="database">
+<h2>Database<a class="headerlink" href="#database" title="Permalink to this headline">¶</a></h2>
+<p>SID uses a <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> in-memory database as its information storage
+backend. The database consists of two layers:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><strong>Database abstraction layer</strong></div>
+<div class="line">This is a layer that abstracts away actual access to a database. This
+way, it is possible to support and choose from various low-level
+database backends without a need to modify the layers above.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>SID database layer</strong></div>
+<div class="line">This layer provides access to SID’s own database for modules to
+access through SID module API.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<div class="section" id="database-abstraction-layer">
+<h3>Database abstraction layer<a class="headerlink" href="#database-abstraction-layer" title="Permalink to this headline">¶</a></h3>
+<p>The database abstraction layer defines common API to access a <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code>
+database where the key at this layer is always defined as a null-terminated
+string. All values have defined size and the value itself is either:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><strong>Single value</strong></div>
+<div class="line">Here, the size is the actual size of the value. The value is a direct
+pointer to the object in memory.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Value vector</strong></div>
+<div class="line">Here, the size is the number of elements in the vector. The value is
+a pointer to the vector. Each element of the vector is then a touple
+<code class="docutils literal notranslate"><span class="pre">[pointer,</span> <span class="pre">size]</span></code>, where the pointer is a direct pointer to the
+object in memory. The elements of the vector are not ordered.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>The database abstraction layer API supports:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><strong>Storing and retrieving values</strong></div>
+<div class="line">The way the value is stored is controlled by providing <em>flags</em>:</div>
+</div>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line">no flags</div>
+<div class="line">Defaults are used: a value is a single value and the object in
+memory is copied before storing it in the database.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">VECTOR</span></code></div>
+<div class="line">The value is a value vector.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">REF</span></code></div>
+<div class="line">The value is stored directly as a pointer to the object in
+memory, that is, the value is not copied before storing it in the
+database.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">AUTOFREE</span></code></div>
+<div class="line">The value is automatically freed as soon as it is no longer
+stored in the database.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Iterating through existing keys and values</strong></div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Calling callback functions on key conflicts</strong></div>
+<div class="line">Whenever a key already exists when trying to store a value with
+provided key, a <em>key conflict resolver</em> (if provided) is called. The
+conflict is then resolved by one of:</div>
+</div>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><strong>Using the newly provided value</strong></div>
+<div class="line">The newly provided value is used by default if no key conflict
+resolver is defined or if the resolver confirms it.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Keeping the existing value</strong></div>
+<div class="line">The existing value is used if the resolver confirms the
+existing value.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><strong>Creating a new value on the fly</strong></div>
+<div class="line">The resolver can create a completely new value on the fly based
+on the existing and newly provided value. Then the created
+value is stored instead of the newly provided value.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="sid-database-layer">
+<h3>SID database layer<a class="headerlink" href="#sid-database-layer" title="Permalink to this headline">¶</a></h3>
+<p>This layer handles the actual SID database content which is used by SID’s
+core as well as its modules.</p>
+<p>The main daemon process contains master copy of the database which is then
+shared with all SID worker processes. The database is available as long as
+SID main process is running.</p>
+<p>Each time stage A is started, a snapshot of the master database is created
+which is used throughout the whole stage A processing. At the end of stage
+A, all the changes in the snapshot copy are synchronized with the master
+copy.</p>
+<p>When stage B processing starts, again, a new snapshot of the master copy
+of the database is created and then this one is used throughout the whole
+stage B processing. At the end of stage B, the changes in the snapshot are
+synchronized with the master copy.</p>
+<p>The snapshotting supports complete access to database records without a
+need to take locks when performing database reads or writes as well as
+consistent views of the whole database while accessing it even several
+times during either A or B stage processing.</p>
+<p>Internally, the key is compounded of these <strong>key parts</strong> each separated by
+<code class="docutils literal notranslate"><span class="pre">:</span></code> character:</p>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">prefix</span></code></div>
+<div class="line">The <em>prefix</em> is reserved for operation specification. Currently, this
+is used for snapshot copy synchronization:</div>
+</div>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line">blank</div>
+<div class="line">No operation.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">+</span></code></div>
+<div class="line">Add a value to master record.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">-</span></code></div>
+<div class="line">Remove a value from master record.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">ns</span></code></div>
+<div class="line">This stands for <em>namespace</em> and it is used to separate records into
+top-level categories:</div>
+</div>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">U</span></code></div>
+<div class="line"><em>Udev</em> namespace. This is a virtual namespace which is not
+recorded in master database. Instead, it is available only in
+the snapshots during stage A and stage B processing. This
+namespace contains all variables which were available and then
+imported at the time of the <code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">scan</span></code> request.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">D</span></code></div>
+<div class="line"><em>Device</em> namespace containing records which are unique per
+device.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">M</span></code></div>
+<div class="line"><em>Module</em> namespace containing records which are unique per
+module.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">G</span></code></div>
+<div class="line"><em>Global</em> namespace containing global which are globally unique.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">ns_part</span></code></div>
+<div class="line">This stands for <em>namespace partition</em>. It is bound to the <code class="docutils literal notranslate"><span class="pre">ns</span></code>
+field and it specifies it further:</div>
+</div>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">major_minor</span></code></div>
+<div class="line">Device number for <code class="docutils literal notranslate"><span class="pre">U</span></code> udev namespace.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">major_minor</span></code></div>
+<div class="line">Device number for <code class="docutils literal notranslate"><span class="pre">D</span></code> device namespace.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">module_name</span></code></div>
+<div class="line">Module’s name for <code class="docutils literal notranslate"><span class="pre">M</span></code> module namespace.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line">blank</div>
+<div class="line">Used for <code class="docutils literal notranslate"><span class="pre">G</span></code> global namespace.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">dom</span></code></div>
+<div class="line">This stands for <em>domain</em>. It is a domain of the record within the
+<code class="docutils literal notranslate"><span class="pre">ns:ns_part</span></code> pair. Currently, these domains are used:</div>
+</div>
+<blockquote>
+<div><ul>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">USR</span></code></div>
+<div class="line">User domain (user-specified records).</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">LYR</span></code></div>
+<div class="line">Device layer domain. Records describing device layering and
+associated dependencies.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">id</span></code></div>
+<div class="line">This stands for <em>identifier</em>. That is the main identifier for the
+record.</div>
+</div>
+</li>
+<li><div class="first line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">id_part</span></code></div>
+<div class="line">This stands for <em>identifier partition</em>. It is bound to the <code class="docutils literal notranslate"><span class="pre">id</span></code>
+field and it specifies it further.</div>
+</div>
+</li>
+</ul>
+</div></blockquote>
+<p>The complete <strong>compound key</strong> is then:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">prefix</span><span class="p">:</span><span class="n">ns</span><span class="p">:</span><span class="n">ns_part</span><span class="p">:</span><span class="n">dom</span><span class="p">:</span><span class="nb">id</span><span class="p">:</span><span class="n">id_part</span>
+</pre></div>
+</div>
+<p>The <strong>value</strong> is either a <em>single value</em> or a <em>set of values</em>. Each value
+always has specified size. The values are not limited to strings only and
+it is possible to store raw binary values.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Future revisions of SID should provide a database that is persistent over
+SID’s restarts and system reboots. Such database would provide useful
+hints  when devices, layers and whole stacks are discovered and
+instantiated.</p>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="api.html" class="btn btn-neutral float-right" title="Module API" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="prerequisities.html" class="btn btn-neutral" title="Prerequisities" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Peter Rajnoha.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+   <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

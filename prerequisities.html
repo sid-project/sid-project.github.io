@@ -1,0 +1,582 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Storage Instantiation Daemon</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+
+  
+
+  
+        <link rel="index" title="Index"
+              href="genindex.html"/>
+        <link rel="search" title="Search" href="search.html"/>
+    <link rel="top" title="Storage Instantiation Daemon  documentation" href="index.html"/>
+        <link rel="next" title="Storage Instantiation Daemon" href="daemon.html"/>
+        <link rel="prev" title="Context" href="context.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search"  style="background-color: #343131">
+          
+
+          <a href="https://sid-project.github.io">
+            <img src="_static/sid.png" class="logo" />
+
+            <span class="project-title">Storage Instantiation Daemon</span>
+          </a>
+
+          <ul class="edition-switcher">
+            <li>Edition: </li>
+            <li><a href="../v">Switch editions</a></li>
+            
+          </ul>
+
+          
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="community.html">Community</a></li>
+<li class="toctree-l1"><a class="reference internal" href="context.html">Context</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Prerequisities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="daemon.html">Storage Instantiation Daemon</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api.html">Module API</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Storage Instantiation Daemon</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="dd-masthead">
+  <h1 class="dd-title">Storage Instantiation Daemon</h1>
+  <ul class="dd-authors">
+    
+  </ul>
+  <p>Latest Revision: <a href="#change-record"></a></p>
+</div>
+           <div itemprop="articleBody">
+            
+  <div class="section" id="prerequisities">
+<h1>Prerequisities<a class="headerlink" href="#prerequisities" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="sid-udevd-builtin-command">
+<h2><code class="docutils literal notranslate"><span class="pre">sid</span></code> udevd builtin command<a class="headerlink" href="#sid-udevd-builtin-command" title="Permalink to this headline">¶</a></h2>
+<p>We need to establish a communication channel between udevd and new Storage
+Instantiation Daemon (SID) to make it possible to effectively interchange
+information between the two.</p>
+<p>Udevd supports implementation of builtin commands which are initialized as
+soon as udevd is started and finalized when udevd is stopped. This way,
+udevd dos not need to fork and execute a new process for each uevent that
+is evaluated like it does when external commands are referenced in udev
+rules.</p>
+<p>We can call builtin commands in udev rules in very similar way to calling
+any external commands – the rules only need to specify that we are
+requesting a builtin command instead of an external one with
+<code class="docutils literal notranslate"><span class="pre">RUN{builtin}</span></code> or <code class="docutils literal notranslate"><span class="pre">IMPORT{builtin}</span></code> rule.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">A udevd builtin command is directly integrated into udevd source code
+using an internal modular interface. The udevd does not support external
+and dynamically loaded modules yet to implement this functionality.</p>
+</div>
+<p>The channel between udevd/sid builtin command and SID itself is implemented
+using local stream and connection oriented socket IPC (the
+<code class="docutils literal notranslate"><span class="pre">AF_UNIX</span></code>/<code class="docutils literal notranslate"><span class="pre">AF_LOCAL</span></code> socket domain, <code class="docutils literal notranslate"><span class="pre">SOCK_STREAM</span></code> socket type).</p>
+<p>If udevd creates a new worker process, the connection is established on
+first <code class="docutils literal notranslate"><span class="pre">sid</span></code> builtin command call and it is kept open until udevd worker
+exits (or until it is terminated by main udevd process in case of a
+timeout). This also counts with any udevd worker reuse for subsequent
+uevent processing if there are more uevents queued - the connection is kept
+alive.</p>
+<p>Since we use stream and connection oriented channel, the receiving side
+(SID) can detect peer’s (udevd worker) hang up. This way, SID is able to
+detect worker timeouts and it can trigger subsequent fallback operation if
+the hang up happens at unexpected time.</p>
+<div class="section" id="subcommands-supported-by-sid-udevd-builtin-command">
+<h3>Subcommands supported by <code class="docutils literal notranslate"><span class="pre">sid</span></code> udevd builtin command<a class="headerlink" href="#subcommands-supported-by-sid-udevd-builtin-command" title="Permalink to this headline">¶</a></h3>
+<ul>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">active</span></code></p>
+<dl class="docutils">
+<dt>Purpose:</dt>
+<dd><p class="first last">Check SID availability.</p>
+</dd>
+<dt>Input:</dt>
+<dd><p class="first last">None.</p>
+</dd>
+<dt>Output:</dt>
+<dd><p class="first"><code class="docutils literal notranslate"><span class="pre">SID_BRIDGE_STATUS=&lt;status&gt;</span></code> pair where <code class="docutils literal notranslate"><span class="pre">&lt;status&gt;</span></code> is one of:</p>
+<blockquote class="last">
+<div><ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">active</span></code> if compatible version of SID is running,</li>
+<li><code class="docutils literal notranslate"><span class="pre">inactive</span></code> if not running,</li>
+<li><code class="docutils literal notranslate"><span class="pre">incompatible</span></code> if SID is running, but its version is
+incompatible with current <code class="docutils literal notranslate"><span class="pre">sid</span></code> udevd builtin command.</li>
+</ul>
+</div></blockquote>
+</dd>
+<dt>Notes:</dt>
+<dd><p class="first last"><code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">active</span></code> is primarily used in udev rules to switch functionality
+to fallback mode without SID if needed.</p>
+</dd>
+<dt>Example:</dt>
+<dd><div class="first last highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">IMPORT{builtin}=&quot;sid active&quot;</span>
+<span class="go">ENV{SID_BRIDGE_STATUS}==&quot;active&quot;, ...</span>
+<span class="go">ENV{SID_BRIDGE_STATUS}==&quot;incompatible&quot;, ...</span>
+<span class="go">ENV{SID_BRIDGE_STATUS}==&quot;inactive&quot;, ...</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</li>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">scan</span></code></p>
+<dl class="docutils">
+<dt>Purpose:</dt>
+<dd><p class="first last">Execute SID identification and scanning routines, update SID database
+accordingly, schedule and execute associated actions.</p>
+</dd>
+<dt>Input:</dt>
+<dd><p class="first last">udev environment in <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> format for currently processed uevent
+that is available at the time of the call.</p>
+</dd>
+<dt>Output:</dt>
+<dd><p class="first last">Environment in <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> format with changed and/or newly added
+items.</p>
+</dd>
+<dt>Example:</dt>
+<dd><div class="first last highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">IMPORT{builtin}=&quot;sid scan&quot;</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</li>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">checkpoint</span> <span class="pre">&lt;checkpoint_name&gt;</span> <span class="pre">[&lt;key&gt;</span> <span class="pre">...]</span></code></p>
+<dl class="docutils">
+<dt>Purpose:</dt>
+<dd><p class="first last">Send notification to SID about reaching a checkpoint.</p>
+</dd>
+<dt>Input:</dt>
+<dd><p class="first last"><code class="docutils literal notranslate"><span class="pre">&lt;checkpoint_name&gt;</span></code> that is reached while evaluating udev rules.
+Optionally, a key list referencing keys from current udev environment
+can be passed in (or just <code class="docutils literal notranslate"><span class="pre">all</span></code> keyword to mean all available keys).
+The command will then, in addition to the checkpoint name itself, send
+over selected <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs to SID from current udev’s per-device
+environment. There is one reserved checkpoint name called <code class="docutils literal notranslate"><span class="pre">complete</span></code>
+to notify SID that udev processing in udev rules is reaching its end.</p>
+</dd>
+<dt>Output:</dt>
+<dd><p class="first last">None.</p>
+</dd>
+<dt>Notes:</dt>
+<dd><p class="first last">Checkpoints can be used for debugging purposes where we install or
+enable additional udev rules with these checkpoints executed for SID to
+be able to track the progression of uevent processing.</p>
+</dd>
+<dt>Example:</dt>
+<dd><div class="first last highlight-console notranslate"><div class="highlight"><pre><span></span><span class="go">PROGRAM{builtin}=&quot;sid checkpoint my_checkpoint A B C&quot;</span>
+<span class="go">RUN{builtin}=&quot;sid checkpoint complete&quot;</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</li>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">version</span></code></p>
+<dl class="docutils">
+<dt>Purpose:</dt>
+<dd><p class="first last">Return version information for <code class="docutils literal notranslate"><span class="pre">sid</span></code> udevd builtin command and SID
+daemon (if available).</p>
+</dd>
+<dt>Input:</dt>
+<dd><p class="first last">None.</p>
+</dd>
+<dt>Output:</dt>
+<dd><p class="first">A list of <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs:</p>
+<blockquote class="last">
+<div><ul class="simple">
+<li><code class="docutils literal notranslate"><span class="pre">SID_PROTOCOL=&lt;protocol_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_MAJOR=&lt;major_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_MINOR=&lt;minor_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_RELEASE=&lt;release_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_BUILTIN_PROTOCOL=&lt;protocol_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_BUILTIN_MAJOR=&lt;major_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_BUILTIN_MINOR=&lt;minor_version&gt;</span></code></li>
+<li><code class="docutils literal notranslate"><span class="pre">SID_BUILTIN_RELEASE=&lt;release_version&gt;</span></code></li>
+</ul>
+</div></blockquote>
+</dd>
+<dt>Notes:</dt>
+<dd><p class="first last">Even though it is possible to call <code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">version</span></code> in udev rules, it
+makes more sense to call this as part of <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">test-builtin</span></code>
+command for the result to be included in various tools which collect
+debugging and version information about current system environment.
+Note that <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">test-builtin</span></code> command requires a <code class="docutils literal notranslate"><span class="pre">sysfs</span></code> path
+for an existing device given as argument. However, the <code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">version</span></code>
+builtin command is not bound to any device as it only collects version
+information, therefore, we can use arbitrary existing <code class="docutils literal notranslate"><span class="pre">sysfs</span></code> path
+here just to fulfill the requirement - it is ignored by the
+<code class="docutils literal notranslate"><span class="pre">sid</span> <span class="pre">version</span></code> command.</p>
+</dd>
+<dt>Example:</dt>
+<dd><div class="first last highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> udevadm test-builtin <span class="s2">&quot;sid version&quot;</span> /sys/kernel
+<span class="go">SID_PROTOCOL=1</span>
+<span class="go">SID_MAJOR=0</span>
+<span class="go">SID_MINOR=0</span>
+<span class="go">SID_RELEASE=1</span>
+<span class="go">SID_BUILTIN_PROTOCOL=1</span>
+<span class="go">SID_BUILTIN_MAJOR=0</span>
+<span class="go">SID_BUILTIN_MINOR=0</span>
+<span class="go">SID_BUILTIN_RELEASE=1</span>
+</pre></div>
+</div>
+</dd>
+</dl>
+</li>
+</ul>
+</div>
+</div>
+<div class="section" id="enhanced-synthetic-uevents">
+<h2>Enhanced synthetic uevents<a class="headerlink" href="#enhanced-synthetic-uevents" title="Permalink to this headline">¶</a></h2>
+<p>When processing uevents, we need to take into consideration the fact that
+not all uevents have their origins in direct processing within
+kernel itself. There are also synthetic uevents which are generated as a
+result of userspace actions, that is, writing uevent’s action name to
+<code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file. For us to be able to make a better distinction
+between synthetic and genuine uevents, we need to enhance the synthetic
+uevent interface.</p>
+<div class="section" id="kernel-changes-to-support-enhanced-synthetic-uevents">
+<h3>Kernel changes to support enhanced synthetic uevents<a class="headerlink" href="#kernel-changes-to-support-enhanced-synthetic-uevents" title="Permalink to this headline">¶</a></h3>
+<p>We can enhance the original synthetic uevent interface to make it possible
+to pass additional arguments with the action name written to
+<code class="docutils literal notranslate"><span class="pre">/sys/…/uevent</span></code> file.</p>
+<p>The proposal is to pass a unique identifier with the event name which marks
+the generated uevent as being part of a transaction. The transaction may
+span one or more uevents. The identifier then appears as an environment
+variable in the generatad uevent. If we use a single identifier with more
+uevents, we logically group them together - in this case any userspace
+process reading such uevents can watch and/or collect all members of the
+group. Also, this way, it is possible to synchronize with the synthetic
+uevent processing and we can wait for all the changes in the group to
+settle down before continuing with subsequent processing.</p>
+<p>Before, we could not wait for a single (or selected group) of uevent
+processing to finish. We could do this only at global level using
+<code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">settle</span></code> command which in turn waits until whole udev processing
+queue is empty - in which case, we also wait for any unrelated uevents
+which may happen for any other devices in parallel and no matter if they
+are synthetic or genuine ones or if they are of any significance to us.</p>
+<p>For backwards compatibility, the identifier is not required for synthetic
+uevent to be generated. In this case, the kernel will automatically add an
+identifier with zero value.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">We have chosen UUID to represent the identifier – there are already
+existing tools to generate UUIDs easily on command line (for example
+<code class="docutils literal notranslate"><span class="pre">uuidgen</span></code>  that is part of essential <code class="docutils literal notranslate"><span class="pre">util-linux</span></code> package) or by
+using various libraries (for example <code class="docutils literal notranslate"><span class="pre">libuuid</span></code> that is also part of
+<code class="docutils literal notranslate"><span class="pre">util-linux</span></code> or <code class="docutils literal notranslate"><span class="pre">sd-id128</span></code> from <code class="docutils literal notranslate"><span class="pre">libsystemd</span></code> that is part of
+<code class="docutils literal notranslate"><span class="pre">systemd</span></code> pack).</p>
+</div>
+<p>Userspace processes should be also able to pass more variables for the
+generated synthetic uevents. The list of extra environment variables is
+then passed as <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs following the identifier. The <code class="docutils literal notranslate"><span class="pre">KEY</span></code>
+and <code class="docutils literal notranslate"><span class="pre">VALUE</span></code> allowed character set will be limited to alphanumeric
+characters. Each <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pair is delimited by a space character.
+To avoid name clashes for existing udev environment variable keys, the
+kernel will prepend a prefix automatically for each <code class="docutils literal notranslate"><span class="pre">KEY</span></code> that is passed
+through the <code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file - that prefix is <code class="docutils literal notranslate"><span class="pre">SYNTH_</span></code>.</p>
+<p>Following is an example of enhanced synthetic uevent interface usage and
+functionality:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> <span class="nv">uuid</span><span class="o">=</span><span class="k">$(</span>uuidgen<span class="k">)</span>
+
+<span class="gp">#</span> <span class="nb">echo</span> <span class="nv">$uuid</span>
+<span class="go">4f60b88c-3052-4daa-8904-2e4efe8563ef</span>
+
+<span class="gp">#</span> <span class="nb">echo</span> <span class="s2">&quot;change </span><span class="nv">$uuid</span><span class="s2"> A=1 B=abc&quot;</span> &gt; /sys/block/sda/uevent
+</pre></div>
+</div>
+<p>Monitoring generated synthetic uevent for this uevent trigger shows that a
+uevent with the additional <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs we passed in are now a part
+of the uevent as <code class="docutils literal notranslate"><span class="pre">SYNTH_KEY=VALUE</span></code> pairs:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> udevadm monitor --kernel --property
+
+<span class="go">monitor will print the received events for:</span>
+
+<span class="go">KERNEL - the kernel uevent</span>
+
+<span class="go">KERNEL[12557.917744] change   /devices/pci0000:00/0000:00:08.0/virtio4/host2/target2:0:0/2:0:0:0/block/sda (block)</span>
+<span class="go">ACTION=change</span>
+<span class="go">DEVNAME=/dev/sda</span>
+<span class="go">DEVPATH=/devices/pci0000:00/0000:00:08.0/virtio4/host2/target2:0:0/2:0:0:0/block/sda</span>
+<span class="go">DEVTYPE=disk</span>
+<span class="go">MAJOR=8</span>
+<span class="go">MINOR=0</span>
+<span class="go">SEQNUM=2027</span>
+<span class="go">SUBSYSTEM=block</span>
+<span class="go">SYNTH_ARG_A=1</span>
+<span class="go">SYNTH_ARG_B=abc</span>
+<span class="go">SYNTH_UUID=4f60b88c-3052-4daa-8904-2e4efe8563ef</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> interface still remains backwards compatible. That
+means, if we use only the action name for synthetic uevent trigger and no
+further additional variables, this still works as expected:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> <span class="nb">echo</span> <span class="s2">&quot;change&quot;</span> &gt; /sys/block/sda/uevent
+</pre></div>
+</div>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> udevadm monitor --kernel --property
+
+<span class="go">monitor will print the received events for:</span>
+
+<span class="go">KERNEL - the kernel uevent</span>
+
+<span class="go">KERNEL[12646.761609] change   /devices/pci0000:00/0000:00:08.0/virtio4/host2/target2:0:0/2:0:0:0/block/sda (block)</span>
+<span class="go">ACTION=change</span>
+<span class="go">DEVNAME=/dev/sda</span>
+<span class="go">DEVPATH=/devices/pci0000:00/0000:00:08.0/virtio4/host2/target2:0:0/2:0:0:0/block/sda</span>
+<span class="go">DEVTYPE=disk</span>
+<span class="go">MAJOR=8</span>
+<span class="go">MINOR=0</span>
+<span class="go">SEQNUM=2028</span>
+<span class="go">SUBSYSTEM=block</span>
+<span class="go">SYNTH_UUID=0</span>
+</pre></div>
+</div>
+<p>In this case, there is <code class="docutils literal notranslate"><span class="pre">SYNTH_UUID=0</span></code> added automatically by kernel so
+even if the extra arguments are not used when writing to
+<code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> to generate the synthetic uevent, we can still make a
+difference between synthetic and genuine uevents when processing them - the
+synthetic uevents will always contain <code class="docutils literal notranslate"><span class="pre">SYNTH_UUID</span></code> key  while genuine
+uevents will not have this variable set.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The <a class="reference external" href="https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-uevent">enhanced synthetic uevent interface</a>
+is supported since Linux kernel version 4.13.</p>
+</div>
+</div>
+<div class="section" id="userspace-changes-to-support-enhanced-synthetic-uevents">
+<h3>Userspace changes to support enhanced synthetic uevents<a class="headerlink" href="#userspace-changes-to-support-enhanced-synthetic-uevents" title="Permalink to this headline">¶</a></h3>
+<p>Udevd itself uses synthetic uevent interface to generate synthetic uevents
+to implement udevd’s <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code> rule support and
+<code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code> functionality. The <code class="docutils literal notranslate"><span class="pre">libudev</span></code> library currently does
+not cover any synthetic uevent functionality yet.</p>
+<p>When using patched kernel with the enhanced synthetic uevent interface and
+without any further changes in <code class="docutils literal notranslate"><span class="pre">OPTIONS=&quot;watch&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code>
+implementation, we end up with synthetic uevents generated with
+<code class="docutils literal notranslate"><span class="pre">SYNTH_UUID=0</span></code> pair in the uevent and no further keys defined with
+<code class="docutils literal notranslate"><span class="pre">SYNTH_</span></code> prefix. This improves the situation for SID and udev rules to
+recognize such uevents as synthetic ones, but we would like to specify
+further what kind of synthetic uevent this is and make a difference among
+other synthetic uevents that may be generated. Therefore, we are proposing
+an approach where whenever udevd enerates any synthetic uevents, they will
+be marked appropriately.</p>
+<div class="section" id="enhanced-synthetic-uevents-for-options-watch-rule">
+<h4>Enhanced synthetic uevents for <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code> rule<a class="headerlink" href="#enhanced-synthetic-uevents-for-options-watch-rule" title="Permalink to this headline">¶</a></h4>
+<p>All synthetic uevents generated as a result of applying the
+<code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code> rule will contain these <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SYNTH_UUID</span><span class="o">=</span><span class="s2">&quot;00000000-0000-0000-0000-00000000000&quot;</span>
+<span class="n">SYNTH_ARG_UDEV_WATCH</span><span class="o">=</span><span class="s2">&quot;1&quot;</span>
+</pre></div>
+</div>
+<p>This means, each time udevd writes to <code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file to generate
+synthetic uevents in this scenario, it will use this string to trigger the
+uevent:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">change</span> <span class="mi">00000000</span><span class="o">-</span><span class="mi">0000</span><span class="o">-</span><span class="mi">0000</span><span class="o">-</span><span class="mi">0000</span><span class="o">-</span><span class="mi">00000000000</span> <span class="n">UDEV_WATCH</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>The reason we use null UUIDs in synthetic uevents generated based on
+<code class="docutils literal notranslate"><span class="pre">OPTIONS=&quot;watch&quot;</span></code> rule is that we do not have any use for the UUID in
+this scenario yet. This use is left for possible future enhancements.</p>
+</div>
+<div class="section" id="enhanced-synthetic-uevents-for-udevadm-trigger-call">
+<h4>Enhanced synthetic uevents for <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code> call<a class="headerlink" href="#enhanced-synthetic-uevents-for-udevadm-trigger-call" title="Permalink to this headline">¶</a></h4>
+<p>All synthetic uevents generated as a result of executing the
+<code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code> call will contain these <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SYNTH_UUID</span><span class="o">=</span><span class="s2">&quot;&lt;uuid&gt;&quot;</span>
+<span class="n">SYNTH_ARG_UDEV_TRIGGER</span><span class="o">=</span><span class="s2">&quot;1&quot;</span>
+</pre></div>
+</div>
+<p>This means, each time udevd writes to <code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file to generate
+synthetic uevents in this scenario, it will use this string to trigger the
+uevent:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">action_name</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">uuid</span><span class="o">&gt;</span> <span class="n">UDEV_TRIGGER</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Here, the <code class="docutils literal notranslate"><span class="pre">&lt;action_name&gt;</span></code> is <code class="docutils literal notranslate"><span class="pre">ACTION</span></code> as provided with
+<code class="docutils literal notranslate"><span class="pre">-c,</span> <span class="pre">--action=ACTION</span></code> argument which is already supported by
+<code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code>. The <code class="docutils literal notranslate"><span class="pre">&lt;uuid&gt;</span></code> is passed in by using a new
+<code class="docutils literal notranslate"><span class="pre">--uuid=UUID</span></code> argument. The UUID is then used to trigger all the
+uevents - all the uevents which are generated as a result of this trigger
+are then grouped together into a single transaction by this UUID. If the
+UUID is not specified, the <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code> itself generates a new
+random one.</p>
+<p>In addition, we propose a new <code class="docutils literal notranslate"><span class="pre">--wait-uevent</span></code> argument for the
+<code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code> which will cause it wait for all related uevent
+processing in udevd (including all the udev rule processing) to finish
+before it exits. Simply, this will collect and wait for all udev uevents
+having the exact and same UUID before it exits.</p>
+<p>For example, to trigger change uevent for all devices belonging to block
+subsystem and waiting for all associated uevent processing in udevd to
+finish before exiting the <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code>, we will call:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> udevadm trigger --subsystem-match block --action change --wait-uevent
+</pre></div>
+</div>
+<p>To trigger change uevent for all devices belonging to block subsystem
+so that all the generated uevents have 6cab53e2-b9c9-4c43-9d1d-0d8673fb62b0
+UUID set in the uevent environment, we will call:</p>
+<div class="highlight-console notranslate"><div class="highlight"><pre><span></span><span class="gp">#</span> udevadm trigger --subsystem-match block --action change --uuid 6cab53e2-b9c9-4c43-9d1d-0d8673fb62b0
+</pre></div>
+</div>
+<p>In this case, it is up to the uevent listener how it proceeds with all the
+uevents having this single UUID set.</p>
+</div>
+<div class="section" id="enhanced-synthetic-uevents-support-in-libudev">
+<h4>Enhanced synthetic uevents support in <code class="docutils literal notranslate"><span class="pre">libudev</span></code><a class="headerlink" href="#enhanced-synthetic-uevents-support-in-libudev" title="Permalink to this headline">¶</a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">libudev</span></code> library will contain a utility function to generate
+synthetic uevent on demand. The proposed function prototype for
+<code class="docutils literal notranslate"><span class="pre">libudev.h</span></code> interface is:</p>
+<div class="highlight-c notranslate"><div class="highlight"><pre><span></span><span class="kt">int</span> <span class="nf">udev_device_synth_uevent</span><span class="p">(</span><span class="k">struct</span> <span class="n">udev_device</span> <span class="o">*</span><span class="n">udev_device</span><span class="p">,</span> <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span><span class="n">action</span><span class="p">,</span> <span class="kt">bool</span> <span class="n">wait</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="kt">long</span> <span class="kt">long</span> <span class="n">timeout</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">device_synth_uevent</span></code> function generates synthetic uevent of type
+<code class="docutils literal notranslate"><span class="pre">action</span></code> for device <code class="docutils literal notranslate"><span class="pre">udev_device</span></code>. If <code class="docutils literal notranslate"><span class="pre">wait</span></code> is <code class="docutils literal notranslate"><span class="pre">true</span></code>, the
+function sets up uevent monitor internally to wait for corresponding udev
+uevent and exits if the uevent is received or timeout happened with return
+codes set up appropriately. The function matches synthesized uevent based
+on the UUID which is set automatically by <code class="docutils literal notranslate"><span class="pre">libudev</span></code> for this uevent.</p>
+<p>All synthetic uevents generated with <code class="docutils literal notranslate"><span class="pre">device_synth_uevent</span></code> function will
+contain these <code class="docutils literal notranslate"><span class="pre">KEY=VALUE</span></code> pairs:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">SYNTH_UUID</span><span class="o">=</span><span class="s2">&quot;&lt;uuid&gt;&quot;</span>
+<span class="n">SYNTH_ARG_LIBUDEV_TRIGGER</span><span class="o">=</span><span class="s2">&quot;1&quot;</span>
+</pre></div>
+</div>
+<p>This means, each time libudev writes to <code class="docutils literal notranslate"><span class="pre">/sys/.../uevent</span></code> file to
+generate synthetic uevents in this scenario, it will use this string to
+trigger the uevent:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;</span><span class="n">action_name</span><span class="o">&gt;</span> <span class="o">&lt;</span><span class="n">uuid</span><span class="o">&gt;</span> <span class="n">LIBUDEV_TRIGGER</span><span class="o">=</span><span class="mi">1</span>
+</pre></div>
+</div>
+<p>Further functions may be provided in the future to extend this
+functionality more to include sets of devices and hence providing the
+functionality similar to <code class="docutils literal notranslate"><span class="pre">udevadm</span> <span class="pre">trigger</span></code> through <code class="docutils literal notranslate"><span class="pre">libudev</span></code> library.</p>
+<p>Eventually, this interface should be preferred in the future by various
+tools and userspace components instead of relying on <code class="docutils literal notranslate"><span class="pre">OPTIONS+=&quot;watch&quot;</span></code>
+rule.</p>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="daemon.html" class="btn btn-neutral float-right" title="Storage Instantiation Daemon" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="context.html" class="btn btn-neutral" title="Context" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, Peter Rajnoha.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+   <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>
